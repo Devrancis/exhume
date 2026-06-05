@@ -1,8 +1,6 @@
 import re
 from app.models.scan import Severity
 
-# Production-grade regex patterns for credentials. 
-# This is a highly condensed but powerful subset of the 50+ requirements.
 PATTERNS = {
     "AWS Access Key ID": {
         "regex": re.compile(r"(?i)\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b"),
