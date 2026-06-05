@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - MAX_REPO_SIZE_MB=500
+      - SCAN_TIMEOUT_SECONDS=300
+      - TEMP_DIR=/tmp/exhume
+      - CORS_ORIGINS=http://localhost:3000
+    volumes:
+      - exhume_temp:/tmp/exhume
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  exhume_temp:
