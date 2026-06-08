@@ -217,7 +217,7 @@ The tool partially redacts secret values in the UI and never logs raw credential
 
 ## License
 
-MIT — see `LICENSE` for details.
+MIT - see `LICENSE` for details.
 
 ---
 
