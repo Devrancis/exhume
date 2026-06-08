@@ -50,44 +50,51 @@ Exhume is built to let you find these issues before that happens.
 ## Architecture
 
 ```
-exhume/
-├── backend/
-│   ├── app/
-│   │   ├── main.py            # FastAPI app entry + CORS
-│   │   ├── api/
-│   │   │   └── routes/        # scan, report, health endpoints
-│   │   ├── core/              # config, redis client, github wrapper
-│   │   ├── scanner/           # detection engine
-│   │   │   ├── engine.py      # scan pipeline orchestrator
-│   │   │   ├── cloner.py      # repo cloning (public + private)
-│   │   │   ├── history.py     # full git history traversal
-│   │   │   ├── file_scanner.py
-│   │   │   ├── patterns.py    # regex pattern library
-│   │   │   ├── entropy.py     # Shannon entropy detection
-│   │   │   ├── scorer.py      # severity classification
-│   │   │   └── remediator.py  # per-finding fix guidance
-│   │   ├── models/            # Pydantic models
-│   │   ├── workers/           # background scan workers
-│   │   └── report/            # PDF generation
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx           # landing + scan form
-│   │   └── scan/[jobId]/      # results dashboard
-│   ├── components/
-│   │   ├── ScanForm.tsx
-│   │   ├── ScanProgress.tsx   # polls scan status every 2s
-│   │   ├── FindingsTable.tsx
-│   │   ├── FindingCard.tsx
-│   │   ├── RemediationPanel.tsx
-│   │   └── ExportButton.tsx
-│   └── lib/
-│       └── api.ts             # typed API client
-│
+Exhume/
+├── .gitignore
 ├── docker-compose.yml
-└── README.md
+├── README.md
+│
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── .env.example
+│   └── app/
+│       ├── main.py                 # FastAPI entry, routing, and background tasks
+│       ├── models/
+│       │   └── scan.py             # Pydantic data schemas
+│       └── scanner/
+│           ├── engine.py           # Git orchestration and Redis queue worker
+│           ├── entropy.py          # Shannon entropy calculation math
+│           ├── patterns.py         # Regex dictionary for secret detection
+│           └── remediator.py       # Dynamic remediation step generator
+│
+└── frontend/
+    ├── package.json
+    ├── components.json             # shadcn/ui strict configuration
+    ├── tailwind.config.ts
+    ├── tsconfig.json
+    ├── types/
+    │   └── scan.ts                 # TypeScript interfaces mirroring backend
+    ├── lib/
+    │   └── utils.ts                # Tailwind merge utilities (auto-generated)
+    ├── app/
+    │   ├── layout.tsx
+    │   ├── page.tsx                # Landing view & Scan Form
+    │   ├── globals.css             # Tailwind base & CSS variables
+    │   └── scan/
+    │       └── [jobId]/
+    │           └── page.tsx        # Real-time polling dashboard view
+    └── components/
+        ├── RemediationPanel.tsx    # Step-by-step fix instruction UI
+        ├── SecretTypeChart.tsx     # Recharts data visualization
+        ├── SeverityBadge.tsx       # Color-coded severity logic wrapper
+        └── ui/                     # (Atomic Primitive Components)
+            ├── badge.tsx
+            ├── button.tsx
+            ├── card.tsx
+            ├── input.tsx
+            └── table.tsx
 ```
 
 ---
