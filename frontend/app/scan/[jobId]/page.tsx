@@ -1,96 +1,105 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { ScanResult, Finding } from "@/types/scan";
+import { ScanResult } from "@/types/scan";
+import { ScanProgress } from "@/components/ScanProgress";
+import { FindingsTable } from "@/components/FindingsTable";
+import { SecretTypeChart } from "@/components/SecretTypeChart";
+import { Card, CardContent } from "@/components/ui/card";
+import { ShieldAlert, ShieldCheck, AlertTriangle, Info } from "lucide-react";
 
 export default function ScanDashboard() {
   const { jobId } = useParams();
   const [data, setData] = useState<ScanResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scan/${jobId}`);
-      if (res.ok) {
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scan/${jobId}`);
+        if (!res.ok) throw new Error("Failed to fetch scan status");
+        
         const json: ScanResult = await res.json();
         setData(json);
-        if (json.status === "completed" || json.status === "failed") clearInterval(interval);
+        
+        if (json.status === "completed" || json.status === "failed") {
+          clearInterval(pollInterval);
+        }
+      } catch (err) {
+        setError("Unable to connect to the scanning engine. Retrying...");
+        console.error(err);
       }
     }, 2000);
-    return () => clearInterval(interval);
+
+    return () => clearInterval(pollInterval);
   }, [jobId]);
 
-  if (!data) return <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">Loading...</div>;
+  if (!data && !error) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center font-mono text-[#00ff88]">
+        Initializing telemetry link...
+      </div>
+    );
+  }
 
-  const isScanning = data.status === "queued" || data.status === "running";
+  const findings = data?.findings || [];
+  const isScanning = data?.status === "queued" || data?.status === "running";
+
+  // Calculate stats
+  const totalFindings = findings.length;
+  const criticalCount = findings.filter(f => f.severity === 'CRITICAL').length;
+  const highCount = findings.filter(f => f.severity === 'HIGH').length;
+  const medLowCount = findings.filter(f => f.severity === 'MEDIUM' || f.severity === 'LOW').length;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-gray-300 p-8 font-mono">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#0a0a0f] text-gray-300 p-8 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Header & Progress */}
-        <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
-          <h2 className="text-2xl font-bold text-white mb-4">Scan Job: {jobId}</h2>
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="flex-1 bg-black h-4 rounded-full overflow-hidden border border-gray-700">
-              <div className="bg-[#00ff88] h-full transition-all duration-500" style={{ width: `${data.progress.percent}%` }} />
-            </div>
-            <span className="text-sm">{data.progress.percent}%</span>
+        <div className="flex justify-between items-end mb-8 border-b border-gray-800 pb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Security Audit Report</h1>
+            <p className="text-gray-500 font-mono text-sm mt-1">Job ID: {jobId}</p>
           </div>
-          <p className="text-[#00d4ff]">{data.progress.current_step}</p>
-          <div className="flex space-x-6 mt-4 text-sm text-gray-500">
-            <span>Files: {data.progress.files_scanned}</span>
-            <span>Commits: {data.progress.commits_traversed}</span>
-          </div>
+          {!isScanning && (
+            <a 
+              href={`${process.env.NEXT_PUBLIC_API_URL}/api/report/${jobId}/pdf`} 
+              className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium border border-gray-700 transition-colors flex items-center gap-2"
+            >
+              Download PDF Export
+            </a>
+          )}
         </div>
 
-        {/* Results Dashboard */}
-        {!isScanning && data.findings && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-4 gap-4">
-              <StatCard title="Total Findings" value={data.findings.length} color="text-white" />
-              <StatCard title="Critical" value={data.findings.filter(f => f.severity === 'CRITICAL').length} color="text-[#ff3b3b]" />
-              <StatCard title="High" value={data.findings.filter(f => f.severity === 'HIGH').length} color="text-[#ff8c00]" />
-              <StatCard title="Medium/Low" value={data.findings.filter(f => f.severity === 'MEDIUM' || f.severity === 'LOW').length} color="text-yellow-400" />
+        {error && (
+          <div className="bg-red-900/50 border border-red-800 text-red-500 p-4 rounded-lg font-mono text-sm">
+            {error}
+          </div>
+        )}
+
+        {data && <ScanProgress progress={data.progress} status={data.status} />}
+
+        {!isScanning && data && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pt-4">
+            
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <StatCard title="Total Exposed Secrets" value={totalFindings} icon={<ShieldAlert className="w-5 h-5 text-gray-400" />} color="text-white" />
+              <StatCard title="Critical Severity" value={criticalCount} icon={<AlertTriangle className="w-5 h-5 text-red-500" />} color="text-red-500" />
+              <StatCard title="High Severity" value={highCount} icon={<AlertTriangle className="w-5 h-5 text-orange-500" />} color="text-orange-500" />
+              <StatCard title="Medium / Low Severity" value={medLowCount} icon={<Info className="w-5 h-5 text-yellow-500" />} color="text-yellow-500" />
             </div>
 
-            <div className="flex justify-end">
-               <a href={`${process.env.NEXT_PUBLIC_API_URL}/api/report/${jobId}/pdf`} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm border border-gray-700">
-                 Download PDF Report
-               </a>
+            {/* Layout Grid for Chart and Table */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1">
+                <SecretTypeChart findings={findings} />
+              </div>
+              <div className="lg:col-span-2">
+                <FindingsTable findings={findings} />
+              </div>
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-black text-gray-400 border-b border-gray-800">
-                  <tr>
-                    <th className="p-4">Severity</th>
-                    <th className="p-4">Secret Type</th>
-                    <th className="p-4">Location</th>
-                    <th className="p-4">Redacted Value</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800">
-                  {data.findings.map((finding, idx) => (
-                    <tr key={idx} className="hover:bg-gray-800/50">
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${
-                          finding.severity === 'CRITICAL' ? 'bg-red-900/50 text-[#ff3b3b] border border-red-800' :
-                          finding.severity === 'HIGH' ? 'bg-orange-900/50 text-[#ff8c00] border border-orange-800' :
-                          'bg-yellow-900/50 text-yellow-400 border border-yellow-800'
-                        }`}>{finding.severity}</span>
-                      </td>
-                      <td className="p-4 text-white">{finding.secret_type}</td>
-                      <td className="p-4">
-                        <div>{finding.file_path}:{finding.line_number}</div>
-                        {finding.commit_hash && <div className="text-xs text-gray-500 mt-1">Commit: {finding.commit_hash.substring(0,7)}</div>}
-                      </td>
-                      <td className="p-4 text-[#00ff88]">{finding.redacted_value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.findings.length === 0 && <div className="p-8 text-center text-gray-500">No secrets found. Your repository is clean.</div>}
-            </div>
           </div>
         )}
       </div>
@@ -98,11 +107,18 @@ export default function ScanDashboard() {
   );
 }
 
-function StatCard({ title, value, color }: { title: string, value: number, color: string }) {
+function StatCard({ title, value, icon, color }: { title: string, value: number, icon: React.ReactNode, color: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
-      <div className="text-sm text-gray-500 mb-2">{title}</div>
-      <div className={`text-4xl font-bold ${color}`}>{value}</div>
-    </div>
+    <Card className="bg-gray-900 border-gray-800">
+      <CardContent className="p-6 flex flex-col justify-between h-full">
+        <div className="flex justify-between items-start mb-4">
+          <span className="text-sm font-medium text-gray-400">{title}</span>
+          {icon}
+        </div>
+        <div className={`text-4xl font-bold font-mono ${color}`}>
+          {value.toLocaleString()}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
