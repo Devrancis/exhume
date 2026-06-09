@@ -7,7 +7,7 @@ import { ScanProgress } from "@/components/ScanProgress";
 import { FindingsTable } from "@/components/FindingsTable";
 import { SecretTypeChart } from "@/components/SecretTypeChart";
 import { Card, CardContent } from "@/components/ui/card";
-import { ShieldAlert, ShieldCheck, AlertTriangle, Info } from "lucide-react";
+import { ShieldAlert, AlertTriangle, Info } from "lucide-react";
 
 export default function ScanDashboard() {
   const { jobId } = useParams();
