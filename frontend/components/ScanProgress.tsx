@@ -1,6 +1,6 @@
 import { ScanProgress as ScanProgressType } from "@/types/scan";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Loader2, CheckCircle, XCircle} from "lucide-react";
 
 interface Props {
   progress: ScanProgressType;
