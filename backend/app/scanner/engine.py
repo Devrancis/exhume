@@ -11,8 +11,10 @@ from app.scanner.patterns import PATTERNS
 from app.scanner.entropy import detect_high_entropy_string
 from app.scanner.remediator import generate_remediation
 
-r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 TEMP_DIR = os.getenv("TEMP_DIR", "/tmp/exhume")
+
+r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
 
 def redact_secret(secret: str) -> str:
     if len(secret) <= 8:
