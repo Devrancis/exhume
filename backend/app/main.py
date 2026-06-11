@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 import uuid
 import json
 import io
+import os
 from app.models.scan import ScanRequest
 from app.scanner.engine import run_scan_job, r
 from reportlab.pdfgen import canvas
