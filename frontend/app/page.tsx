@@ -46,9 +46,15 @@ export default function Home() {
 
       router.push(`/scan/${data.job_id}`);
       
-    } catch (err: any) {
+    } catch (err) {
       console.error("Echelon Scan Error:", err);
-      setError(err.message || "Failed to initialize scan. Please try again.");
+      
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to initialize scan. Please try again.");
+      }
+      
       setLoading(false);
     }
   };
