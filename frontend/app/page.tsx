@@ -63,7 +63,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#0a0a0f] text-gray-300 flex flex-col items-center justify-center p-6">
       <div className="max-w-2xl w-full space-y-8">
         <div className="text-center space-y-4">
-          <h1 className="text-6xl font-mono font-bold text-[#00ff88]">Echelon.</h1>
+          <h1 className="text-6xl font-mono font-bold text-[#00ff88]">Exhume</h1>
           <p className="text-xl">Find secrets in your code before attackers do.</p>
           <p className="text-sm text-gray-500">Scans repos, histories, and branches for exposed credentials and API keys.</p>
         </div>
