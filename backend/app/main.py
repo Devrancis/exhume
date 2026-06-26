@@ -83,13 +83,13 @@ async def get_pdf_report(job_id: str):
             Paragraph("Severity", header_cell_style)
         ]]
         
-        # Populate table data dynamically mapping values safely
+        # Populate table data dynamically mapping values safely from the Pydantic schema
         for item in findings:
             table_data.append([
-                Paragraph(item.get("file", "N/A"), cell_style),
-                Paragraph(str(item.get("line", "1")), cell_style),
-                Paragraph(item.get("type", "Unknown Secret"), cell_style),
-                Paragraph(f"<code>{item.get('evidence', 'Confidential')}</code>", cell_style),
+                Paragraph(item.get("file_path", "N/A"), cell_style),
+                Paragraph(str(item.get("line_number", "0")), cell_style),
+                Paragraph(item.get("secret_type", "Unknown Secret"), cell_style),
+                Paragraph(f"<code>{item.get('redacted_value', 'Confidential')}</code>", cell_style),
                 Paragraph(f"<b>{item.get('severity', 'CRITICAL')}</b>", cell_style)
             ])
             

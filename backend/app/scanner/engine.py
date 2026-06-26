@@ -8,7 +8,6 @@ import json
 from pydantic import HttpUrl
 from app.models.scan import ScanResult, ScanProgress, Finding, Severity
 from app.scanner.patterns import PATTERNS
-from app.scanner.entropy import detect_high_entropy_string
 from app.scanner.remediator import generate_remediation
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
@@ -50,7 +49,11 @@ def run_scan_job(job_id: str, repo_url: str, scan_history: bool, token: str = No
                 try:
                     with open(filepath, 'r', encoding='utf-8') as f:
                         for line_num, line in enumerate(f, 1):
-                            # Regex Patterns
+                            # Skip massive minified lines or lockfiles to save memory and skip false positives
+                            if len(line) > 1000 or "package-lock.json" in rel_path or "yarn.lock" in rel_path:
+                                continue
+                                
+                            # Strict Regex Pattern Matching
                             for sec_type, config in PATTERNS.items():
                                 matches = config["regex"].findall(line)
                                 for match in matches:
@@ -60,14 +63,6 @@ def run_scan_job(job_id: str, repo_url: str, scan_history: bool, token: str = No
                                         file_path=rel_path, line_number=line_num, redacted_value=redact_secret(val),
                                         remediation_steps=generate_remediation(sec_type, rel_path, config["revoke_url"])
                                     ))
-                            # Entropy Analysis
-                            high_ent = detect_high_entropy_string(line)
-                            if high_ent:
-                                findings.append(Finding(
-                                    finding_id=str(uuid.uuid4()), severity=Severity.MEDIUM, secret_type="High Entropy String",
-                                    file_path=rel_path, line_number=line_num, redacted_value=redact_secret(high_ent),
-                                    remediation_steps=generate_remediation("High Entropy", rel_path, "N/A")
-                                ))
                 except UnicodeDecodeError:
                     pass # Skip binary files
                 files_scanned += 1
@@ -88,7 +83,11 @@ def run_scan_job(job_id: str, repo_url: str, scan_history: bool, token: str = No
                     try:
                         diff_text = diff.diff.decode('utf-8')
                         rel_path = diff.b_path or diff.a_path
-                        line_num = 0
+                        
+                        # Skip lockfiles in history
+                        if "package-lock.json" in str(rel_path) or "yarn.lock" in str(rel_path):
+                            continue
+
                         for line in diff_text.split('\n'):
                             if line.startswith('+') and not line.startswith('+++'):
                                 content = line[1:]
