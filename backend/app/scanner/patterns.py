@@ -1,55 +1,64 @@
 import re
-from app.models.scan import Severity
+import os
 
-PATTERNS = {
-    "AWS Access Key ID": {
-        "regex": re.compile(r"(?i)\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b"),
-        "severity": Severity.CRITICAL,
-        "revoke_url": "https://console.aws.amazon.com/iam/home?#/security_credentials"
-    },
-    "GitHub PAT (Classic)": {
-        "regex": re.compile(r"ghp_[0-9a-zA-Z]{36}"),
-        "severity": Severity.HIGH,
-        "revoke_url": "https://github.com/settings/tokens"
-    },
-    "GitHub PAT (Fine-Grained)": {
-        "regex": re.compile(r"github_pat_[0-9a-zA-Z_]{82}"),
-        "severity": Severity.HIGH,
-        "revoke_url": "https://github.com/settings/tokens"
-    },
-    "Stripe Live Secret Key": {
-        "regex": re.compile(r"sk_live_[0-9a-zA-Z]{24}"),
-        "severity": Severity.CRITICAL,
-        "revoke_url": "https://dashboard.stripe.com/apikeys"
-    },
-    "Stripe Test Secret Key": {
-        "regex": re.compile(r"sk_test_[0-9a-zA-Z]{24}"),
-        "severity": Severity.HIGH,
-        "revoke_url": "https://dashboard.stripe.com/test/apikeys"
-    },
-    "Slack Bot Token": {
-        "regex": re.compile(r"xoxb-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24}"),
-        "severity": Severity.HIGH,
-        "revoke_url": "https://api.slack.com/apps"
-    },
-    "Slack Webhook": {
-        "regex": re.compile(r"https://hooks\.slack\.com/services/T[a-zA-Z0-9_]{8}/B[a-zA-Z0-9_]{8}/[a-zA-Z0-9_]{24}"),
-        "severity": Severity.HIGH,
-        "revoke_url": "https://api.slack.com/apps"
-    },
-    "RSA Private Key": {
-        "regex": re.compile(r"-----BEGIN RSA PRIVATE KEY-----"),
-        "severity": Severity.CRITICAL,
-        "revoke_url": "N/A"
-    },
-    "Generic JWT": {
-        "regex": re.compile(r"ey[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*"),
-        "severity": Severity.MEDIUM,
-        "revoke_url": "N/A"
-    },
-    "Database URI (Credentials Embedded)": {
-        "regex": re.compile(r"(?i)(?:postgres|mysql|mongodb|redis)://[a-zA-Z0-9_]+:[a-zA-Z0-9_!@#$%^&*]+@[a-zA-Z0-9_.-]+:[0-9]+"),
-        "severity": Severity.CRITICAL,
-        "revoke_url": "N/A"
-    }
+# High-risk files that should NEVER be committed to version control
+DANGEROUS_FILES = [
+    r"\.env$", r"\.env\.local$", r"\.env\.production$", r"\.env\.development$",
+    r"\.pem$", r"\.pkcs12$", r"id_rsa", r"id_dsa", r"wp-config\.php$",
+    r"credentials\.json$", r"service-account\.json$"
+]
+
+# Hardened patterns matching explicit vendor prefixes (Zero false-positive rule)
+TARGETED_RULES = {
+    "Slack OAuth Access Token": r"xoxb-[0-9]{11,13}-[a-zA-Z0-9-,]+",
+    "Stripe Secret Key": r"sk_live_[0-9a-zA-Z]{24}",
+    "Google API Key": r"AIzaSy[a-zA-Z0-9-_]{33}",
+    "GitHub Personal Access Token": r"ghp_[a-zA-Z0-9]{36}",
+    "AWS Access Key ID": r"AKIA[0-9A-Z]{16}",
+    "Generic Private Key Header": r"-----BEGIN [A-Z ]+ PRIVATE KEY-----",
+    "Database Connection URI": r"postgresql://\w+:\w+@[\w\.-]+:\d+/\w+",
+    "RSA Private Key Signature": r"-----BEGIN RSA PRIVATE KEY-----"
 }
+
+def analyze_file(file_path: str, content: str) -> list:
+    """
+    Executes a high-precision double pass filter over code assets.
+    Returns structured metrics to be ingested by Redis.
+    """
+    findings = []
+    filename = os.path.basename(file_path)
+    
+    # Pass 1: Structural File Violations
+    for pattern in DANGEROUS_FILES:
+        if re.search(pattern, filename, re.IGNORECASE):
+            findings.append({
+                "file": file_path,
+                "line": 1,
+                "type": "Exposed Configuration File",
+                "evidence": f"Entire key configuration asset '{filename}' committed.",
+                "severity": "CRITICAL"
+            })
+            return findings
+
+    # Pass 2: Exact Prefix-Based Line Violations
+    lines = content.splitlines()
+    for line_num, line in enumerate(lines, 1):
+        # Prevent tracking massive vendor lockfiles or build artifacts
+        if len(line) > 800 or "package-lock.json" in file_path or "yarn.lock" in file_path:
+            continue
+            
+        for rule_name, pattern in TARGETED_RULES.items():
+            match = re.search(pattern, line)
+            if match:
+                # Mask secret tokens to ensure security in reports
+                raw_match = match.group(0)
+                masked_evidence = raw_match[:10] + "..." + raw_match[-4:] if len(raw_match) > 14 else "Confidential Token"
+                
+                findings.append({
+                    "file": file_path,
+                    "line": line_num,
+                    "type": rule_name,
+                    "evidence": masked_evidence,
+                    "severity": "CRITICAL"
+                })
+    return findings
