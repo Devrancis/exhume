@@ -7,7 +7,11 @@ import io
 import os
 from app.models.scan import ScanRequest
 from app.scanner.engine import run_scan_job, r
-from reportlab.pdfgen import canvas
+# ReportLab core modules for clean tabular structure
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 app = FastAPI(title="Exhume API")
 
@@ -49,15 +53,60 @@ async def get_pdf_report(job_id: str):
          raise HTTPException(status_code=400, detail="Scan not completed yet")
     
     buffer = io.BytesIO()
-    p = canvas.Canvas(buffer)
-    p.setFont("Helvetica-Bold", 24)
-    p.drawString(100, 800, "Exhume Security Audit Report")
-    p.setFont("Helvetica", 12)
-    p.drawString(100, 770, f"Job ID: {job_id}")
-    p.drawString(100, 750, f"Total Findings: {len(state.get('findings', []))}")
-    # Note: Full PDF rendering loop goes here. Truncated layout for output constraints, but functionally returns a valid PDF.
-    p.showPage()
-    p.save()
+    
+    # Establish document borders and container bounds (Total printable width = 540pt)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=40, bottomMargin=40)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Typographic configurations
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=22, leading=26, textColor=colors.HexColor("#0F172A"))
+    subtitle_style = ParagraphStyle('DocSub', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor("#64748B"))
+    cell_style = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=8.5, leading=11)
+    header_cell_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=9.5, leading=12, textColor=colors.white, fontName="Helvetica-Bold")
+
+    # Header section
+    story.append(Paragraph("Exhume Security Audit Report", title_style))
+    story.append(Paragraph(f"Job Identifier: {job_id} | Security Verification Engine", subtitle_style))
+    story.append(Spacer(1, 15))
+    
+    findings = state.get("findings", [])
+    if not findings:
+        story.append(Paragraph("<b>Clean Audit:</b> No critical exposed credentials or configuration assets detected in this repository.", styles['Normal']))
+    else:
+        # Table Schema initialization
+        table_data = [[
+            Paragraph("Target File Path", header_cell_style),
+            Paragraph("Line", header_cell_style),
+            Paragraph("Exposure Category", header_cell_style),
+            Paragraph("Evidence", header_cell_style),
+            Paragraph("Severity", header_cell_style)
+        ]]
+        
+        # Populate table data dynamically mapping values safely
+        for item in findings:
+            table_data.append([
+                Paragraph(item.get("file", "N/A"), cell_style),
+                Paragraph(str(item.get("line", "1")), cell_style),
+                Paragraph(item.get("type", "Unknown Secret"), cell_style),
+                Paragraph(f"<code>{item.get('evidence', 'Confidential')}</code>", cell_style),
+                Paragraph(f"<b>{item.get('severity', 'CRITICAL')}</b>", cell_style)
+            ])
+            
+        # Precise grid allocation matching available document width bounds
+        report_table = Table(table_data, colWidths=[175, 35, 115, 140, 75])
+        report_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ]))
+        story.append(report_table)
+
+    doc.build(story)
     buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=exhume_report_{job_id}.pdf"})
 
